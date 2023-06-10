@@ -4,6 +4,9 @@ using System.Diagnostics;
 
 namespace LuaScriptEngineLib.Tests
 {
+    using Functions;
+    using Microsoft.VisualStudio.TestPlatform.CommunicationUtilities;
+
     [TestClass]
     public class LuaScriptEngineFactoryTests
     {
@@ -11,16 +14,27 @@ namespace LuaScriptEngineLib.Tests
         public void CreateEngineTest()
         {
             LuaScriptEngineFactory factory = new LuaScriptEngineFactory();
-            using ILuaScriptEngine engine = factory.CreateEngine(new TraceEmitter());
-            engine.Eval("print('Hello World!!');");
+            using ILuaScriptEngine engine = factory.CreateEngine(new TraceEmitter((message) =>
+            {
+                Assert.AreEqual("Hello World!!" + Environment.NewLine, message);
+            }));
+            engine.EvalAsync("print('Hello World!!');").Wait();
         }
 
         private sealed class TraceEmitter : ILuaScriptEngineOutputEmitter
         {
+            public TraceEmitter(Action<string>? action = null)
+            {
+                this.action = action;
+            }
+
+            private readonly Action<string>? action;
+
             public void Print(string message)
             {
                 Trace.Write(message);
-                Assert.AreEqual("Hello World!!" + Environment.NewLine, message);
+                if (action is not null)
+                    action(message);
             }
         }
 
@@ -31,17 +45,9 @@ namespace LuaScriptEngineLib.Tests
 
             LuaScriptEngineFactory factory = new LuaScriptEngineFactory();
             factory.AddLibrary(new TestLibrary(e));
-            using ILuaScriptEngine engine = factory.CreateEngine(new TraceEmitter2());
-            engine.Eval("print(test.test());");
+            using ILuaScriptEngine engine = factory.CreateEngine(new TraceEmitter());
+            engine.EvalAsync("print(test.test());").Wait();
             Assert.IsTrue(e.Wait(TimeSpan.FromSeconds(5)));
-        }
-
-        private sealed class TraceEmitter2 : ILuaScriptEngineOutputEmitter
-        {
-            public void Print(string message)
-            {
-                Trace.Write(message);
-            }
         }
 
         private sealed class TestLibrary : ILuaLibrary
@@ -82,6 +88,35 @@ namespace LuaScriptEngineLib.Tests
                     tab.Add(functionName, m);
                 }
             }
+        }
+
+        [TestMethod]
+        public void StopScriptTest()
+        {
+            CancellationTokenSource cancellationTokenSource = new CancellationTokenSource();
+            CountdownEvent e = new CountdownEvent(5);
+            LuaScriptEngineFactory factory = new LuaScriptEngineFactory();
+            factory.AddFunction("sleep", new SleepFunction());
+            using ILuaScriptEngine engine = factory.CreateEngine(new TraceEmitter((message) =>
+            {
+                e.Signal();
+            }), cancellationTokenSource.Token);
+            Task t = engine.EvalAsync("while(true) do print('Hello'); sleep(1000); end");
+            e.Wait();
+            cancellationTokenSource.Cancel();
+            Assert.ThrowsException<TaskCanceledException>(() =>
+            {
+                try
+                {
+                    t.Wait();
+                }
+                catch (AggregateException ex)
+                {
+                    TaskCanceledException? taskCanceledException = ex.InnerExceptions.OfType<TaskCanceledException>().FirstOrDefault();
+                    if (taskCanceledException is not null)
+                        throw taskCanceledException;
+                }
+            });
         }
     }
 }

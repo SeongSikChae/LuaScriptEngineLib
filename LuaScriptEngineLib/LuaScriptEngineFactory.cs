@@ -3,6 +3,7 @@
 namespace LuaScriptEngineLib
 {
     using Functions;
+    using System.Threading.Tasks;
 
     public class LuaScriptEngineFactory
     {
@@ -23,8 +24,17 @@ namespace LuaScriptEngineLib
 
         public ILuaScriptEngine CreateEngine(ILuaScriptEngineOutputEmitter? emitter)
         {
+            return CreateEngine(emitter, CancellationToken.None);
+        }
+
+        public ILuaScriptEngine CreateEngine(ILuaScriptEngineOutputEmitter? emitter, CancellationToken cancellationToken)
+        {
             Lua lua = new Lua();
             LuaGlobal g = lua.CreateEnvironment();
+            g.DefaultCompileOptions = new LuaCompileOptions
+            {
+                DebugEngine = new CancallationDebugEngine(cancellationToken)
+            };
             if (emitter is not NoOutputEmitter)
                 g.AddFunction("print", new PrintFunction(emitter));
             foreach (ILuaLibrary lib in libSet)
@@ -51,9 +61,12 @@ namespace LuaScriptEngineLib
 
             public LuaGlobal? Globals { get; private set; }
 
-            public void Eval(string source)
+            public async Task EvalAsync(string source)
             {
-                Globals?.DoChunk(source, "chunk");
+                await Task.Run(() =>
+                {
+                    Globals?.DoChunk(source, "chunk");
+                });
             }
 
             private bool disposedValue;
