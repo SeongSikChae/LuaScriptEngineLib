@@ -2,7 +2,7 @@
 
 namespace LuaScriptEngineLib.Functions
 {
-    public sealed class PrintFunction : ILuaFunction
+    public sealed class PrintFunction : AbstractLuaFunction
     {
         public PrintFunction(ILuaScriptEngineOutputEmitter? emitter)
         {
@@ -11,7 +11,7 @@ namespace LuaScriptEngineLib.Functions
 
         private readonly ILuaScriptEngineOutputEmitter? emitter;
 
-        public void Load(string functionName, LuaTable tab)
+        public override void Load(string functionName, LuaTable tab)
         {
             toString = tab["tostring"] as LuaMethod;
             LuaMethod m = new LuaMethod(this, typeof(PrintFunction).GetMethod("Invoke", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance));
@@ -20,7 +20,7 @@ namespace LuaScriptEngineLib.Functions
 
         private LuaMethod? toString;
 
-        public LuaResult? Invoke(params object[] args)
+        public override LuaResult? Invoke(params object[] args)
         {
             StringWriter sw = new StringWriter();
             if (toString is not null)

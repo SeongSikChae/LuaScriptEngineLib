@@ -108,6 +108,10 @@ namespace LuaScriptEngineLib
             public void Print(string s)
             {
             }
+
+            public void Error(Exception e)
+            {
+            }
         }
     }
 }

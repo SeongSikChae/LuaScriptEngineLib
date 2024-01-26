@@ -5,7 +5,6 @@ using System.Diagnostics;
 namespace LuaScriptEngineLib.Tests
 {
     using Functions;
-    using Microsoft.VisualStudio.TestPlatform.CommunicationUtilities;
 
     [TestClass]
     public class LuaScriptEngineFactoryTests
@@ -36,6 +35,10 @@ namespace LuaScriptEngineLib.Tests
                 if (action is not null)
                     action(message);
             }
+
+            public void Error(Exception e)
+            {
+            }
         }
 
         [TestMethod]
@@ -63,11 +66,11 @@ namespace LuaScriptEngineLib.Tests
             {
                 LuaTable tab = new LuaTable();
                 TestFunction function = new TestFunction(e);
-                function.Load("test", tab);
+                tab.AddFunction("test", function);
                 g.Add("test", tab);
             }
 
-            private sealed class TestFunction : ILuaFunction
+            private sealed class TestFunction : AbstractLuaFunction
             {
                 public TestFunction(CountdownEvent e)
                 {
@@ -76,16 +79,10 @@ namespace LuaScriptEngineLib.Tests
 
                 private readonly CountdownEvent e;
 
-                public LuaResult? Invoke(params object[] args)
+                public override LuaResult? Invoke(params object[] args)
                 {
                     e.Signal(1);
                     return null;
-                }
-
-                public void Load(string functionName, LuaTable tab)
-                {
-                    LuaMethod m = new LuaMethod(this, typeof(TestFunction).GetMethod("Invoke", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance));
-                    tab.Add(functionName, m);
                 }
             }
         }
