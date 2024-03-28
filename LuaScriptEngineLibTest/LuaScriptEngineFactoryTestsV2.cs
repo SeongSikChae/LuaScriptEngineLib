@@ -52,32 +52,13 @@ namespace LuaScriptEngineLibTest
             await engine.EvalAsync(scriptBuilder.ToString());
         }
 
-        private sealed class TimeLib : ILuaLibrary
+        private sealed class TestLib : ILuaLibrary
         {
-            private sealed class FormatFunction : AbstractLuaFunction
-            {
-                public override LuaResult? Invoke(params object[] args)
-                {
-                    DateTime t = new DateTime((long)args[0]);
-                    return new LuaResult(t.ToString((string)args[1], System.Globalization.CultureInfo.CurrentCulture));
-                }
-            }
-
-            private sealed class ParseFunction : AbstractLuaFunction
-            {
-                public override LuaResult? Invoke(params object[] args)
-                {
-                    DateTime t = DateTime.ParseExact((string)args[0], (string)args[1], System.Globalization.CultureInfo.CurrentCulture);
-                    return new LuaResult(t.Ticks);
-                }
-            }
-
             public void Load(LuaGlobal g)
             {
                 LuaTable tab = new LuaTable();
-                tab.AddFunction("format", new FormatFunction());
-                tab.AddFunction("parse", new ParseFunction());
-                g.Add("time", tab);
+                tab.AddFunction("testFunc", new TestFunc());
+                g.Add("testLib", tab);
             }
         }
 
@@ -85,14 +66,12 @@ namespace LuaScriptEngineLibTest
         public async Task AddLibraryTest()
         {
             LuaScriptEngineFactory factory = new LuaScriptEngineFactory();
-            factory.AddLibrary(new TimeLib());
+            factory.AddLibrary(new TestLib());
             StringBuilder scriptBuilder = new StringBuilder();
             scriptBuilder.AppendLine("local a = os.date();");
             scriptBuilder.AppendLine("print(a);");
-            scriptBuilder.AppendLine("local b = time.parse(a, 'yyyy-MM-dd tt HH:mm:ss');");
+            scriptBuilder.AppendLine("local b = testLib.testFunc(a);");
             scriptBuilder.AppendLine("print(b);");
-            scriptBuilder.AppendLine("local c = time.format(b, 'yyyy-MM-dd HH:mm:ss');");
-            scriptBuilder.AppendLine("print(c);");
             using ILuaScriptEngine engine = factory.CreateEngine(new TraceEmitter());
             await engine.EvalAsync(scriptBuilder.ToString());
         }
