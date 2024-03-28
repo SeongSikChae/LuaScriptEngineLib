@@ -2,14 +2,9 @@
 
 namespace LuaScriptEngineLib.Functions
 {
-    public sealed class PrintFunction : AbstractLuaFunction
+    public sealed class PrintFunction(ILuaScriptEngineOutputEmitter? emitter) : AbstractLuaFunction
     {
-        public PrintFunction(ILuaScriptEngineOutputEmitter? emitter)
-        {
-            this.emitter = emitter;
-        }
-
-        private readonly ILuaScriptEngineOutputEmitter? emitter;
+        private readonly ILuaScriptEngineOutputEmitter? emitter = emitter;
 
         public override void Load(string functionName, LuaTable tab)
         {

@@ -61,12 +61,19 @@ namespace LuaScriptEngineLib
 
             public LuaGlobal? Globals { get; private set; }
 
-            public async Task EvalAsync(string source)
+            public async Task<LuaResult?> EvalAsync(string source)
             {
-                await Task.Run(() =>
+                return await Task.Run(() =>
                 {
-                    Globals?.DoChunk(source, "chunk");
+                    return Globals?.DoChunk(source, "chunk");
                 });
+            }
+
+            public LuaResult? Eval(string source, TimeSpan timeout)
+            {
+                using Task<LuaResult?> task = EvalAsync(source);
+                task.Wait(timeout);
+                return task.Result;
             }
 
             private bool disposedValue;

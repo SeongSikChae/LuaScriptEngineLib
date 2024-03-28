@@ -4,7 +4,9 @@ namespace LuaScriptEngineLib
 {
     public interface ILuaScriptEngine : IDisposable
     {
-        Task EvalAsync(string source);
+        Task<LuaResult?> EvalAsync(string source);
+
+        LuaResult? Eval(string source, TimeSpan timeout);
 
         ILuaScriptEngineOutputEmitter? Emitter { get; }
 
