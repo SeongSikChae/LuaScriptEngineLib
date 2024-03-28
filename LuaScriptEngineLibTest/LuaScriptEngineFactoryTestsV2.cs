@@ -30,12 +30,11 @@ namespace LuaScriptEngineLibTest
             await engine.EvalAsync("print('Hello World!!');");
         }
 
-        private sealed class TimeParseFunc : AbstractLuaFunction
+        private sealed class TestFunc : AbstractLuaFunction
         {
             public override LuaResult? Invoke(params object[] args)
             {
-                DateTime t = DateTime.ParseExact((string)args[0], "yyyy-MM-dd tt HH:mm:ss", System.Globalization.CultureInfo.CurrentCulture);
-                return new LuaResult(t.Ticks);
+                return new LuaResult(args[0]);
             }
         }
 
@@ -43,11 +42,11 @@ namespace LuaScriptEngineLibTest
         public async Task AddFunctionTest()
         {
             LuaScriptEngineFactory factory = new LuaScriptEngineFactory();
-            factory.AddFunction("timeParse", new TimeParseFunc());
+            factory.AddFunction("testFunc", new TestFunc());
             StringBuilder scriptBuilder = new StringBuilder();
             scriptBuilder.AppendLine("local a = os.date();");
             scriptBuilder.AppendLine("print(a);");
-            scriptBuilder.AppendLine("local b = timeParse(a);");
+            scriptBuilder.AppendLine("local b = testFunc(a);");
             scriptBuilder.AppendLine("print(b);");
             using ILuaScriptEngine engine = factory.CreateEngine(new TraceEmitter());
             await engine.EvalAsync(scriptBuilder.ToString());
