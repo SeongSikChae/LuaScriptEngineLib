@@ -1,5 +1,4 @@
 ﻿using LuaScriptEngineLib;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Neo.IronLua;
 using System.Diagnostics;
 using System.Text;
@@ -26,8 +25,8 @@ namespace LuaScriptEngineLibTest
         public async Task CreateEngineTest()
         {
             LuaScriptEngineFactory factory = new LuaScriptEngineFactory();
-            using ILuaScriptEngine engine = factory.CreateEngine(new TraceEmitter());
-            await engine.EvalAsync("print('Hello World!!');");
+            using ILuaScriptEngine engine = factory.CreateEngine(new TraceEmitter(), TestContext.CancellationToken);
+            await engine.EvalAsync("print('Hello World!!');", TestContext.CancellationToken);
         }
 
         private sealed class TestFunc : AbstractLuaFunction
@@ -44,12 +43,11 @@ namespace LuaScriptEngineLibTest
             LuaScriptEngineFactory factory = new LuaScriptEngineFactory();
             factory.AddFunction("testFunc", new TestFunc());
             StringBuilder scriptBuilder = new StringBuilder();
-            scriptBuilder.AppendLine("local a = os.date();");
-            scriptBuilder.AppendLine("print(a);");
-            scriptBuilder.AppendLine("local b = testFunc(a);");
+            scriptBuilder.AppendLine("print('A');");
+            scriptBuilder.AppendLine("local b = testFunc('A');");
             scriptBuilder.AppendLine("print(b);");
-            using ILuaScriptEngine engine = factory.CreateEngine(new TraceEmitter());
-            await engine.EvalAsync(scriptBuilder.ToString());
+            using ILuaScriptEngine engine = factory.CreateEngine(new TraceEmitter(), TestContext.CancellationToken);
+            await engine.EvalAsync(scriptBuilder.ToString(), TestContext.CancellationToken);
         }
 
         private sealed class TestLib : ILuaLibrary
@@ -68,12 +66,11 @@ namespace LuaScriptEngineLibTest
             LuaScriptEngineFactory factory = new LuaScriptEngineFactory();
             factory.AddLibrary(new TestLib());
             StringBuilder scriptBuilder = new StringBuilder();
-            scriptBuilder.AppendLine("local a = os.date();");
-            scriptBuilder.AppendLine("print(a);");
-            scriptBuilder.AppendLine("local b = testLib.testFunc(a);");
+            scriptBuilder.AppendLine("print('A');");
+            scriptBuilder.AppendLine("local b = testLib.testFunc('A');");
             scriptBuilder.AppendLine("print(b);");
-            using ILuaScriptEngine engine = factory.CreateEngine(new TraceEmitter());
-            await engine.EvalAsync(scriptBuilder.ToString());
+            using ILuaScriptEngine engine = factory.CreateEngine(new TraceEmitter(), TestContext.CancellationToken);
+            await engine.EvalAsync(scriptBuilder.ToString(), TestContext.CancellationToken);
         }
 
         [TestMethod]
@@ -84,12 +81,10 @@ namespace LuaScriptEngineLibTest
             scriptBuilder.AppendLine("function call(str)");
             scriptBuilder.AppendLine("\tprint(str);");
             scriptBuilder.AppendLine("end");
-            using ILuaScriptEngine engine = factory.CreateEngine(new TraceEmitter());
-            await engine.EvalAsync(scriptBuilder.ToString());
+            using ILuaScriptEngine engine = factory.CreateEngine(new TraceEmitter(), TestContext.CancellationToken);
+            await engine.EvalAsync(scriptBuilder.ToString(), TestContext.CancellationToken);
 
-            Assert.IsNotNull(engine.Globals);
-
-            LuaFunction<string> callFunc = engine.Globals.GetFunction<string>("call");
+            LuaFunction<string> callFunc = engine.GetFunction<string>("call");
             _ = callFunc.Invoke("Hello, World!!");
         }
 
@@ -102,13 +97,241 @@ namespace LuaScriptEngineLibTest
             scriptBuilder.AppendLine("\tprint(str1);");
             scriptBuilder.AppendLine("\tprint(str2);");
             scriptBuilder.AppendLine("end");
-            using ILuaScriptEngine engine = factory.CreateEngine(new TraceEmitter());
-            await engine.EvalAsync(scriptBuilder.ToString());
+            using ILuaScriptEngine engine = factory.CreateEngine(new TraceEmitter(), TestContext.CancellationToken);
+            await engine.EvalAsync(scriptBuilder.ToString(), TestContext.CancellationToken);
 
-            Assert.IsNotNull(engine.Globals);
-
-            LuaFunction<string, string> callFunc = engine.Globals.GetFunction<string, string>("call");
+            LuaFunction<string, string> callFunc = engine.GetFunction<string, string>("call");
             _ = callFunc.Invoke("Hello, World!!", "Test");
         }
+
+        [TestMethod]
+        public async Task SendboxClrTest()
+        {
+            LuaScriptEngineFactory factory = new LuaScriptEngineFactory();
+            StringBuilder scriptBuilder = new StringBuilder("clr.System.IO.File.WriteAllText(\"out.txt\", \"hello from lua\")");
+            using ILuaScriptEngine engine = factory.CreateEngine(new TraceEmitter(), TestContext.CancellationToken);
+            await Assert.ThrowsExactlyAsync<LuaRuntimeException>(async () =>
+            {
+                await engine.EvalAsync(scriptBuilder.ToString(), TestContext.CancellationToken);
+            });
+        }
+
+        [TestMethod]
+        public async Task SendboxIOTest()
+        {
+            LuaScriptEngineFactory factory = new LuaScriptEngineFactory();
+            StringBuilder scriptBuilder = new StringBuilder("print(io)\nlocal f = io.open(\"hello.txt\", \"w\")\nf:close()");
+            using ILuaScriptEngine engine = factory.CreateEngine(new TraceEmitter(), TestContext.CancellationToken);
+            await Assert.ThrowsExactlyAsync<AccessViolationException>(async () =>
+            {
+                await engine.EvalAsync(scriptBuilder.ToString(), TestContext.CancellationToken);
+            });
+        }
+
+        [TestMethod]
+        public async Task SendboxOSTest()
+        {
+            LuaScriptEngineFactory factory = new LuaScriptEngineFactory();
+            StringBuilder scriptBuilder = new StringBuilder("print(os.time())");
+            using ILuaScriptEngine engine = factory.CreateEngine(new TraceEmitter(), TestContext.CancellationToken);
+            await Assert.ThrowsExactlyAsync<AccessViolationException>(async () =>
+            {
+                await engine.EvalAsync(scriptBuilder.ToString(), TestContext.CancellationToken);
+            });
+        }
+
+        [TestMethod]
+        public async Task SendboxPackageTest()
+        {
+            LuaScriptEngineFactory factory = new LuaScriptEngineFactory();
+            StringBuilder scriptBuilder = new StringBuilder("print(package.path)");
+            using ILuaScriptEngine engine = factory.CreateEngine(new TraceEmitter(), TestContext.CancellationToken);
+            await Assert.ThrowsExactlyAsync<AccessViolationException>(async () =>
+            {
+                await engine.EvalAsync(scriptBuilder.ToString(), TestContext.CancellationToken);
+            });
+        }
+
+        [TestMethod]
+        public async Task SendboxDebugTest()
+        {
+            LuaScriptEngineFactory factory = new LuaScriptEngineFactory();
+            StringBuilder scriptBuilder = new StringBuilder("print(debug.traceback('stack dump'))");
+            using ILuaScriptEngine engine = factory.CreateEngine(new TraceEmitter(), TestContext.CancellationToken);
+            await Assert.ThrowsExactlyAsync<AccessViolationException>(async () =>
+            {
+                await engine.EvalAsync(scriptBuilder.ToString(), TestContext.CancellationToken);
+            });
+        }
+
+        [TestMethod]
+        public async Task SendboxDoFileTest()
+        {
+            LuaScriptEngineFactory factory = new LuaScriptEngineFactory();
+            StringBuilder scriptBuilder = new StringBuilder("dofile('helper.lua')");
+            using ILuaScriptEngine engine = factory.CreateEngine(new TraceEmitter(), TestContext.CancellationToken);
+            await Assert.ThrowsExactlyAsync<AccessViolationException>(async () =>
+            {
+                await engine.EvalAsync(scriptBuilder.ToString(), TestContext.CancellationToken);
+            });
+        }
+
+        [TestMethod]
+        public async Task SendboxLoadFileTest()
+        {
+            LuaScriptEngineFactory factory = new LuaScriptEngineFactory();
+            StringBuilder scriptBuilder = new StringBuilder("loadfile('helper.lua')");
+            using ILuaScriptEngine engine = factory.CreateEngine(new TraceEmitter(), TestContext.CancellationToken);
+            await Assert.ThrowsExactlyAsync<AccessViolationException>(async () =>
+            {
+                await engine.EvalAsync(scriptBuilder.ToString(), TestContext.CancellationToken);
+            });
+        }
+
+        [TestMethod]
+        public async Task SendboxRequireTest()
+        {
+            LuaScriptEngineFactory factory = new LuaScriptEngineFactory();
+            StringBuilder scriptBuilder = new StringBuilder("require('mylib')");
+            using ILuaScriptEngine engine = factory.CreateEngine(new TraceEmitter(), TestContext.CancellationToken);
+            await Assert.ThrowsExactlyAsync<AccessViolationException>(async () =>
+            {
+                await engine.EvalAsync(scriptBuilder.ToString(), TestContext.CancellationToken);
+            });
+        }
+
+        [TestMethod]
+        public async Task SendboxLoadTest()
+        {
+            LuaScriptEngineFactory factory = new LuaScriptEngineFactory();
+            StringBuilder scriptBuilder = new StringBuilder("load('return 1')");
+            using ILuaScriptEngine engine = factory.CreateEngine(new TraceEmitter(), TestContext.CancellationToken);
+            await Assert.ThrowsExactlyAsync<AccessViolationException>(async () =>
+            {
+                await engine.EvalAsync(scriptBuilder.ToString(), TestContext.CancellationToken);
+            });
+        }
+
+        [TestMethod]
+        public async Task SendboxDoChunkTest()
+        {
+            LuaScriptEngineFactory factory = new LuaScriptEngineFactory();
+            StringBuilder scriptBuilder = new StringBuilder("dochunk('return 1')");
+            using ILuaScriptEngine engine = factory.CreateEngine(new TraceEmitter(), TestContext.CancellationToken);
+            await Assert.ThrowsExactlyAsync<AccessViolationException>(async () =>
+            {
+                await engine.EvalAsync(scriptBuilder.ToString(), TestContext.CancellationToken);
+            });
+        }
+
+        [TestMethod]
+        public async Task SendboxGetMetaTableTest()
+        {
+            LuaScriptEngineFactory factory = new LuaScriptEngineFactory();
+            StringBuilder scriptBuilder = new StringBuilder("getmetatable({})");
+            using ILuaScriptEngine engine = factory.CreateEngine(new TraceEmitter(), TestContext.CancellationToken);
+            await Assert.ThrowsExactlyAsync<AccessViolationException>(async () =>
+            {
+                await engine.EvalAsync(scriptBuilder.ToString(), TestContext.CancellationToken);
+            });
+        }
+
+        [TestMethod]
+        public async Task SendboxSetMetaTableTest()
+        {
+            LuaScriptEngineFactory factory = new LuaScriptEngineFactory();
+            StringBuilder scriptBuilder = new StringBuilder("setmetatable({}, {})");
+            using ILuaScriptEngine engine = factory.CreateEngine(new TraceEmitter(), TestContext.CancellationToken);
+            await Assert.ThrowsExactlyAsync<AccessViolationException>(async () =>
+            {
+                await engine.EvalAsync(scriptBuilder.ToString(), TestContext.CancellationToken);
+            });
+        }
+
+        [TestMethod]
+        public async Task SendboxRawGetTest()
+        {
+            LuaScriptEngineFactory factory = new LuaScriptEngineFactory();
+            StringBuilder scriptBuilder = new StringBuilder("rawget({}, 'k')");
+            using ILuaScriptEngine engine = factory.CreateEngine(new TraceEmitter(), TestContext.CancellationToken);
+            await Assert.ThrowsExactlyAsync<AccessViolationException>(async () =>
+            {
+                await engine.EvalAsync(scriptBuilder.ToString(), TestContext.CancellationToken);
+            });
+        }
+
+        [TestMethod]
+        public async Task SendboxRawSetTest()
+        {
+            LuaScriptEngineFactory factory = new LuaScriptEngineFactory();
+            StringBuilder scriptBuilder = new StringBuilder("rawset({}, 'k', 1)");
+            using ILuaScriptEngine engine = factory.CreateEngine(new TraceEmitter(), TestContext.CancellationToken);
+            await Assert.ThrowsExactlyAsync<AccessViolationException>(async () =>
+            {
+                await engine.EvalAsync(scriptBuilder.ToString(), TestContext.CancellationToken);
+            });
+        }
+
+        [TestMethod]
+        public async Task SendboxRawEqualTest()
+        {
+            LuaScriptEngineFactory factory = new LuaScriptEngineFactory();
+            StringBuilder scriptBuilder = new StringBuilder("rawequal(1, 1)");
+            using ILuaScriptEngine engine = factory.CreateEngine(new TraceEmitter(), TestContext.CancellationToken);
+            await Assert.ThrowsExactlyAsync<AccessViolationException>(async () =>
+            {
+                await engine.EvalAsync(scriptBuilder.ToString(), TestContext.CancellationToken);
+            });
+        }
+
+        [TestMethod]
+        public async Task SendboxRawLenTest()
+        {
+            LuaScriptEngineFactory factory = new LuaScriptEngineFactory();
+            StringBuilder scriptBuilder = new StringBuilder("rawlen({})");
+            using ILuaScriptEngine engine = factory.CreateEngine(new TraceEmitter(), TestContext.CancellationToken);
+            await Assert.ThrowsExactlyAsync<AccessViolationException>(async () =>
+            {
+                await engine.EvalAsync(scriptBuilder.ToString(), TestContext.CancellationToken);
+            });
+        }
+
+        [TestMethod]
+        public async Task SendboxCollectGarbageTest()
+        {
+            LuaScriptEngineFactory factory = new LuaScriptEngineFactory();
+            StringBuilder scriptBuilder = new StringBuilder("collectgarbage('collect')");
+            using ILuaScriptEngine engine = factory.CreateEngine(new TraceEmitter(), TestContext.CancellationToken);
+            await Assert.ThrowsExactlyAsync<AccessViolationException>(async () =>
+            {
+                await engine.EvalAsync(scriptBuilder.ToString(), TestContext.CancellationToken);
+            });
+        }
+
+        [TestMethod]
+        public async Task SendboxRawMembersTest()
+        {
+            LuaScriptEngineFactory factory = new LuaScriptEngineFactory();
+            StringBuilder scriptBuilder = new StringBuilder("rawmembers({})");
+            using ILuaScriptEngine engine = factory.CreateEngine(new TraceEmitter(), TestContext.CancellationToken);
+            await Assert.ThrowsExactlyAsync<AccessViolationException>(async () =>
+            {
+                await engine.EvalAsync(scriptBuilder.ToString(), TestContext.CancellationToken);
+            });
+        }
+
+        [TestMethod]
+        public async Task SendboxRawArrayTest()
+        {
+            LuaScriptEngineFactory factory = new LuaScriptEngineFactory();
+            StringBuilder scriptBuilder = new StringBuilder("rawarray({})");
+            using ILuaScriptEngine engine = factory.CreateEngine(new TraceEmitter(), TestContext.CancellationToken);
+            await Assert.ThrowsExactlyAsync<AccessViolationException>(async () =>
+            {
+                await engine.EvalAsync(scriptBuilder.ToString(), TestContext.CancellationToken);
+            });
+        }
+
+        public TestContext TestContext { get; set; }
     }
 }

@@ -1,5 +1,4 @@
-﻿using Microsoft.VisualStudio.TestTools.UnitTesting;
-using Neo.IronLua;
+﻿using Neo.IronLua;
 using System.Diagnostics;
 
 namespace LuaScriptEngineLib.Tests
@@ -16,8 +15,8 @@ namespace LuaScriptEngineLib.Tests
             using ILuaScriptEngine engine = factory.CreateEngine(new TraceEmitter((message) =>
             {
                 Assert.AreEqual("Hello World!!" + Environment.NewLine, message);
-            }));
-            engine.EvalAsync("print('Hello World!!');").Wait();
+            }), TestContext.CancellationToken);
+            engine.EvalAsync("print('Hello World!!');", TestContext.CancellationToken).Wait(TestContext.CancellationToken);
         }
 
         private sealed class TraceEmitter : ILuaScriptEngineOutputEmitter
@@ -49,8 +48,8 @@ namespace LuaScriptEngineLib.Tests
             LuaScriptEngineFactory factory = new LuaScriptEngineFactory();
             factory.AddLibrary(new TestLibrary(e));
             using ILuaScriptEngine engine = factory.CreateEngine(new TraceEmitter());
-            engine.EvalAsync("print(test.test());").Wait();
-            Assert.IsTrue(e.Wait(TimeSpan.FromSeconds(5)));
+            engine.EvalAsync("print(test.test());", TestContext.CancellationToken).Wait(TestContext.CancellationToken);
+            Assert.IsTrue(e.Wait(TimeSpan.FromSeconds(5), TestContext.CancellationToken));
         }
 
         private sealed class TestLibrary : ILuaLibrary
@@ -97,11 +96,14 @@ namespace LuaScriptEngineLib.Tests
             using ILuaScriptEngine engine = factory.CreateEngine(new TraceEmitter((message) =>
             {
                 e.Signal();
-            }), cancellationTokenSource.Token);
-            Task t = engine.EvalAsync("while(true) do print('Hello'); sleep(1000); end");
-            e.Wait();
+            }), new LuaCompileOptions
+            {
+                DebugEngine = new TestDebugger()
+            }, cancellationTokenSource.Token);
+            Task t = engine.EvalAsync("while(true) do print('Hello'); sleep(1000); end", TestContext.CancellationToken);
+            e.Wait(TestContext.CancellationToken);
             cancellationTokenSource.Cancel();
-            Assert.ThrowsException<TaskCanceledException>(() =>
+            Assert.ThrowsExactly<TaskCanceledException>(() =>
             {
                 try
                 {
@@ -114,6 +116,16 @@ namespace LuaScriptEngineLib.Tests
                         throw taskCanceledException;
                 }
             });
+        }
+
+        public TestContext TestContext { get; set; }
+    }
+
+    class TestDebugger : LuaTraceLineDebugger
+    {
+        protected override void OnTracePoint(LuaTraceLineEventArgs e)
+        {
+            base.OnTracePoint(e);
         }
     }
 }

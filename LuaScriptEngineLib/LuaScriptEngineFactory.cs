@@ -1,10 +1,8 @@
 ﻿using Neo.IronLua;
+using LuaScriptEngineLib.Functions;
 
 namespace LuaScriptEngineLib
 {
-    using Functions;
-    using System.Threading.Tasks;
-
     public class LuaScriptEngineFactory
     {
         public void AddLibrary(ILuaLibrary library)
@@ -24,29 +22,75 @@ namespace LuaScriptEngineLib
 
         public ILuaScriptEngine CreateEngine(ILuaScriptEngineOutputEmitter? emitter)
         {
-            return CreateEngine(emitter, CancellationToken.None);
+            return CreateEngine(emitter, null, CancellationToken.None);
+        }
+
+        public ILuaScriptEngine CreateEngine(ILuaScriptEngineOutputEmitter? emitter, LuaCompileOptions? options)
+        {
+            return CreateEngine(emitter, options, CancellationToken.None);
         }
 
         public ILuaScriptEngine CreateEngine(ILuaScriptEngineOutputEmitter? emitter, CancellationToken cancellationToken)
         {
+            return CreateEngine(emitter, null, cancellationToken);
+        }
+
+        public ILuaScriptEngine CreateEngine(ILuaScriptEngineOutputEmitter? emitter, LuaCompileOptions? options, CancellationToken cancellationToken)
+        {
             Lua lua = new Lua();
             LuaGlobal g = lua.CreateEnvironment();
-            g.DefaultCompileOptions = new LuaCompileOptions
+            lua.CreateEnvironment();
+            if (options != null)
             {
-                DebugEngine = new CancallationDebugEngine(cancellationToken)
-            };
+                if (options.DebugEngine is not null)
+                    options.DebugEngine = new CombinationDebugger(new CancallationDebugger(cancellationToken), options.DebugEngine);
+                else
+                    options.DebugEngine = new CancallationDebugger(cancellationToken);
+            }
+            else 
+            {
+                options = new LuaCompileOptions
+                {
+                    DebugEngine = new CancallationDebugger(cancellationToken),
+                    ClrEnabled = false
+                };
+            }
+
+            if (options.SendboxEnabled)
+            {
+                g["io"] = new LuaSecurityException("io");
+                g["os"] = new LuaSecurityException("os");
+                g["package"] = new LuaSecurityException("package");
+                g["debug"] = new LuaSecurityException("debug");
+                g["dofile"] = new LuaSecurityException("dofile");
+                g["loadfile"] = new LuaSecurityException("loadfile");
+                g["require"] = new LuaSecurityException("require");
+                g["load"] = new LuaSecurityException("load");
+                g["dochunk"] = new LuaSecurityException("dochunk");
+                g["getmetatable"] = new LuaSecurityException("getmetatable");
+                g["setmetatable"] = new LuaSecurityException("setmetatable");
+                g["rawget"] = new LuaSecurityException("rawget");
+                g["rawset"] = new LuaSecurityException("rawset");
+                g["rawequal"] = new LuaSecurityException("rawequal");
+                g["rawlen"] = new LuaSecurityException("rawlen");
+                g["collectgarbage"] = new LuaSecurityException("collectgarbage");
+                g["rawmembers"] = new LuaSecurityException("rawmembers");
+                g["rawarray"] = new LuaSecurityException("rawarray");
+            }
+
+            g.DefaultCompileOptions = options;
             if (emitter is not NoOutputEmitter)
                 g.AddFunction("print", new PrintFunction(emitter));
             foreach (ILuaLibrary lib in libSet)
                 g.AddLibrary(lib);
             foreach (KeyValuePair<string, ILuaFunction> pair in functionDic)
                 g.AddFunction(pair.Key, pair.Value);
-            LuaScriptEngine engine = new LuaScriptEngine();
+            LuaScriptEngine engine = new LuaScriptEngine(cancellationToken);
             engine.Initialize(lua, g, emitter);
             return engine;
         }
 
-        private sealed class LuaScriptEngine : ILuaScriptEngine
+        private sealed class LuaScriptEngine(CancellationToken cancellationToken) : ILuaScriptEngine
         {
             public void Initialize(Lua lua, LuaGlobal g, ILuaScriptEngineOutputEmitter? emitter)
             {
@@ -59,21 +103,43 @@ namespace LuaScriptEngineLib
 
             public ILuaScriptEngineOutputEmitter? Emitter { get; private set; }
 
-            public LuaGlobal? Globals { get; private set; }
+            private LuaGlobal? Globals { get; set; }
 
-            public async Task<LuaResult?> EvalAsync(string source)
+            public async Task<LuaResult?> EvalAsync(string source, CancellationToken cancellationToken)
             {
                 return await Task.Run(() =>
                 {
                     return Globals?.DoChunk(source, "chunk");
-                });
+                }, cancellationToken);
             }
 
             public LuaResult? Eval(string source, TimeSpan timeout)
             {
-                using Task<LuaResult?> task = EvalAsync(source);
-                task.Wait(timeout);
-                return task.Result;
+                using Task<LuaResult?> task = EvalAsync(source, cancellationToken);
+                if (task.Wait(timeout, cancellationToken))
+                    return task.GetAwaiter().GetResult();
+                throw new TimeoutException($"Script evaluation timed out after {timeout}.");
+            }
+
+            public LuaFunction<T> GetFunction<T>(string functionName)
+            {
+                LuaFunction<T>? function = Globals?.GetFunction<T>(functionName);
+                ArgumentNullException.ThrowIfNull(function);
+                return function;
+            }
+
+            public LuaFunction<T1, T2> GetFunction<T1, T2>(string functionName)
+            {
+                LuaFunction<T1, T2>? function = Globals?.GetFunction<T1, T2>(functionName);
+                ArgumentNullException.ThrowIfNull(function);
+                return function;
+            }
+
+            public LuaFunction<T1, T2, T3> GetFunction<T1, T2, T3>(string functionName)
+            {
+                LuaFunction<T1, T2, T3>? function = Globals?.GetFunction<T1, T2, T3>(functionName);
+                ArgumentNullException.ThrowIfNull(function);
+                return function;
             }
 
             private bool disposedValue;
