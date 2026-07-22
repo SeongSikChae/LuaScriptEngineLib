@@ -61,12 +61,12 @@ namespace LuaScriptEngineLib.Tests
 
             private readonly CountdownEvent e;
 
-            public void Load(LuaGlobal g)
+            public void Load(Action<string, LuaTable> action)
             {
                 LuaTable tab = new LuaTable();
                 TestFunction function = new TestFunction(e);
                 tab.AddFunction("test", function);
-                g.Add("test", tab);
+                action("test", tab);
             }
 
             private sealed class TestFunction : AbstractLuaFunction

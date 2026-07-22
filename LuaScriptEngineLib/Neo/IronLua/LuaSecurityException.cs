@@ -1,5 +1,4 @@
-﻿using System.Dynamic;
-namespace Neo.IronLua
+﻿namespace Neo.IronLua
 {
     internal class LuaSecurityException(string name) : LuaTable
     {

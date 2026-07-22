@@ -3,8 +3,15 @@ using LuaScriptEngineLib.Functions;
 
 namespace LuaScriptEngineLib
 {
+    /// <summary>
+    /// 라이브러리·함수를 등록하고 <see cref="ILuaScriptEngine"/> 인스턴스를 생성합니다.
+    /// </summary>
     public class LuaScriptEngineFactory
     {
+        /// <summary>
+        /// 엔진 생성 시 전역 환경에 로드할 라이브러리를 등록합니다.
+        /// </summary>
+        /// <param name="library">등록할 라이브러리입니다.</param>
         public void AddLibrary(ILuaLibrary library)
         {
             libSet.Add(library);
@@ -12,6 +19,11 @@ namespace LuaScriptEngineLib
 
         private readonly HashSet<ILuaLibrary> libSet = new HashSet<ILuaLibrary>();
 
+        /// <summary>
+        /// 엔진 생성 시 전역 환경에 등록할 함수를 추가합니다. 동일 이름이 있으면 덮어씁니다.
+        /// </summary>
+        /// <param name="functionName">등록할 함수 이름입니다.</param>
+        /// <param name="function">등록할 함수입니다.</param>
         public void AddFunction(string functionName, ILuaFunction function)
         {
             if (!functionDic.TryAdd(functionName, function))
@@ -20,21 +32,45 @@ namespace LuaScriptEngineLib
 
         private readonly Dictionary<string, ILuaFunction> functionDic = new Dictionary<string, ILuaFunction>();
 
+        /// <summary>
+        /// 출력 Emitter를 지정하여 스크립트 엔진을 생성합니다.
+        /// </summary>
+        /// <param name="emitter">스크립트 출력을 수신하는 Emitter입니다.</param>
+        /// <returns>생성된 스크립트 엔진입니다.</returns>
         public ILuaScriptEngine CreateEngine(ILuaScriptEngineOutputEmitter? emitter)
         {
             return CreateEngine(emitter, null, CancellationToken.None);
         }
 
+        /// <summary>
+        /// 출력 Emitter와 컴파일 옵션을 지정하여 스크립트 엔진을 생성합니다.
+        /// </summary>
+        /// <param name="emitter">스크립트 출력을 수신하는 Emitter입니다.</param>
+        /// <param name="options">Lua 컴파일 옵션입니다. <see langword="null"/>이면 기본 옵션을 사용합니다.</param>
+        /// <returns>생성된 스크립트 엔진입니다.</returns>
         public ILuaScriptEngine CreateEngine(ILuaScriptEngineOutputEmitter? emitter, LuaCompileOptions? options)
         {
             return CreateEngine(emitter, options, CancellationToken.None);
         }
 
+        /// <summary>
+        /// 출력 Emitter와 취소 토큰을 지정하여 스크립트 엔진을 생성합니다.
+        /// </summary>
+        /// <param name="emitter">스크립트 출력을 수신하는 Emitter입니다.</param>
+        /// <param name="cancellationToken">스크립트 실행을 취소하는 데 사용하는 토큰입니다.</param>
+        /// <returns>생성된 스크립트 엔진입니다.</returns>
         public ILuaScriptEngine CreateEngine(ILuaScriptEngineOutputEmitter? emitter, CancellationToken cancellationToken)
         {
             return CreateEngine(emitter, null, cancellationToken);
         }
 
+        /// <summary>
+        /// 출력 Emitter, 컴파일 옵션, 취소 토큰을 지정하여 스크립트 엔진을 생성합니다.
+        /// </summary>
+        /// <param name="emitter">스크립트 출력을 수신하는 Emitter입니다.</param>
+        /// <param name="options">Lua 컴파일 옵션입니다. <see langword="null"/>이면 샌드박스·취소를 위한 기본 옵션을 사용합니다.</param>
+        /// <param name="cancellationToken">스크립트 실행을 취소하는 데 사용하는 토큰입니다.</param>
+        /// <returns>생성된 스크립트 엔진입니다.</returns>
         public ILuaScriptEngine CreateEngine(ILuaScriptEngineOutputEmitter? emitter, LuaCompileOptions? options, CancellationToken cancellationToken)
         {
             Lua lua = new Lua();
@@ -90,8 +126,18 @@ namespace LuaScriptEngineLib
             return engine;
         }
 
+        /// <summary>
+        /// <see cref="ILuaScriptEngine"/>의 기본 구현입니다.
+        /// </summary>
+        /// <param name="cancellationToken">동기 실행 시 취소를 위해 사용하는 토큰입니다.</param>
         private sealed class LuaScriptEngine(CancellationToken cancellationToken) : ILuaScriptEngine
         {
+            /// <summary>
+            /// Lua 런타임과 전역 환경, 출력 Emitter를 초기화합니다.
+            /// </summary>
+            /// <param name="lua">사용할 <see cref="Lua"/> 인스턴스입니다.</param>
+            /// <param name="g">전역 환경입니다.</param>
+            /// <param name="emitter">출력 Emitter입니다. <see langword="null"/>이면 출력을 무시합니다.</param>
             public void Initialize(Lua lua, LuaGlobal g, ILuaScriptEngineOutputEmitter? emitter)
             {
                 this.lua = lua;
@@ -101,10 +147,12 @@ namespace LuaScriptEngineLib
 
             private Lua? lua;
 
+            /// <inheritdoc />
             public ILuaScriptEngineOutputEmitter? Emitter { get; private set; }
 
             private LuaGlobal? Globals { get; set; }
 
+            /// <inheritdoc />
             public async Task<LuaResult?> EvalAsync(string source, CancellationToken cancellationToken)
             {
                 return await Task.Run(() =>
@@ -113,6 +161,7 @@ namespace LuaScriptEngineLib
                 }, cancellationToken);
             }
 
+            /// <inheritdoc />
             public LuaResult? Eval(string source, TimeSpan timeout)
             {
                 using Task<LuaResult?> task = EvalAsync(source, cancellationToken);
@@ -121,6 +170,7 @@ namespace LuaScriptEngineLib
                 throw new TimeoutException($"Script evaluation timed out after {timeout}.");
             }
 
+            /// <inheritdoc />
             public LuaFunction<T> GetFunction<T>(string functionName)
             {
                 LuaFunction<T>? function = Globals?.GetFunction<T>(functionName);
@@ -128,6 +178,7 @@ namespace LuaScriptEngineLib
                 return function;
             }
 
+            /// <inheritdoc />
             public LuaFunction<T1, T2> GetFunction<T1, T2>(string functionName)
             {
                 LuaFunction<T1, T2>? function = Globals?.GetFunction<T1, T2>(functionName);
@@ -135,6 +186,7 @@ namespace LuaScriptEngineLib
                 return function;
             }
 
+            /// <inheritdoc />
             public LuaFunction<T1, T2, T3> GetFunction<T1, T2, T3>(string functionName)
             {
                 LuaFunction<T1, T2, T3>? function = Globals?.GetFunction<T1, T2, T3>(functionName);
@@ -168,6 +220,7 @@ namespace LuaScriptEngineLib
             //     Dispose(disposing: false);
             // }
 
+            /// <inheritdoc />
             public void Dispose()
             {
                 // 이 코드를 변경하지 마세요. 'Dispose(bool disposing)' 메서드에 정리 코드를 입력합니다.
@@ -176,12 +229,17 @@ namespace LuaScriptEngineLib
             }
         }
 
+        /// <summary>
+        /// 출력을 모두 무시하는 Emitter입니다.
+        /// </summary>
         private sealed class NoOutputEmitter : ILuaScriptEngineOutputEmitter
         {
+            /// <inheritdoc />
             public void Print(string s)
             {
             }
 
+            /// <inheritdoc />
             public void Error(Exception e)
             {
             }

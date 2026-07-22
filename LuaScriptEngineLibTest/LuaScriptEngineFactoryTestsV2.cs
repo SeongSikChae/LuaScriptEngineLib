@@ -52,11 +52,11 @@ namespace LuaScriptEngineLibTest
 
         private sealed class TestLib : ILuaLibrary
         {
-            public void Load(LuaGlobal g)
+            public void Load(Action<string, LuaTable> action)
             {
                 LuaTable tab = new LuaTable();
                 tab.AddFunction("testFunc", new TestFunc());
-                g.Add("testLib", tab);
+                action("testLib", tab);
             }
         }
 

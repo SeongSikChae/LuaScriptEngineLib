@@ -18,7 +18,7 @@ namespace Neo.IronLua
             Delegate? delegate1 = chunkInfo.GetValue(chunk) as Delegate;
             Delegate? delegate2 = chunkInfo.GetValue(chunk2) as Delegate;
 
-            return new CombinationLuaChunk(lua, expr.Name, Delegate.Combine(delegate1, delegate2));
+            return new CombinationLuaChunk(lua, expr.Name ?? string.Empty, Delegate.Combine(delegate1, delegate2) ?? expr.Compile());
         }
 
         class CombinationLuaChunk(Lua lua, string name, Delegate chunk) : LuaChunk(lua, name, chunk)
